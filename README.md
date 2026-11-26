@@ -85,7 +85,7 @@ If these return real data, the server is working end to end.
 - **Market & research** — commodity price context, local research notes
 - **Portfolio** — a private, local holdings tracker with live P&L
 
-32 tools in total — full reference [below](#tools--32-total). Every tool returns the same [response envelope](#response-envelope), so partial or degraded data is always explicit.
+34 tools in total — full reference [below](#tools--34-total). Every tool returns the same [response envelope](#response-envelope), so partial or degraded data is always explicit.
 
 Two prompts — `deep_dive(symbol)` and `value_screen(min_roce, max_pe)` — package common research workflows; clients that support MCP prompts show them as slash commands.
 
@@ -191,7 +191,7 @@ Claude Desktop does **not** inherit your shell environment, so credentials must 
 
 **4.** Quit Claude Desktop completely (**Cmd+Q** on macOS) and reopen it.
 
-**5.** Check the tools icon in the message composer — `screener` should list its 32 tools. Then ask: `"Search for Asian Paints"`.
+**5.** Check the tools icon in the message composer — `screener` should list its 34 tools. Then ask: `"Search for Asian Paints"`.
 
 > Server not showing up? Check **Settings → Developer** for its status, and the logs at `~/Library/Application Support/Claude/logs/mcp-server-screener.log` (macOS) or `%APPDATA%\Claude\logs\` (Windows). Invalid JSON — often a stray trailing comma — makes Claude Desktop skip every server silently.
 
@@ -278,7 +278,7 @@ Never commit real credentials — the values above are placeholders.
 
 ---
 
-## Tools — 32 total
+## Tools — 34 total
 
 Grouped by category. See [Example workflows](#example-workflows) for the ones you'll reach for most.
 
@@ -354,6 +354,15 @@ Grouped by category. See [Example workflows](#example-workflows) for the ones yo
 | `fyers_status` | Whether FYERS is signed in today, until when, and the sign-in link | FYERS |
 
 > With FYERS connected, `get_portfolio` and `get_company_overview` also use live prices. See [Live prices from FYERS](#live-prices-from-fyers).
+
+### Telegram channels (optional)
+
+| Tool | What it does | Login needed |
+|------|-------------|:---:|
+| `telegram_status` | Whether the channel reader is set up, which channels and topics are followed, posts stored, last pull, errors | Telegram |
+| `get_channel_mentions` | Stocks your followed channels discussed: calls with entry, stop, targets and timeframe as written, every later update (target/stop hit, exit, cancel), and plain mentions, each with the post text and a link | Telegram |
+
+> Reads only channels you have joined, with your own account, and never posts. Posts are stored on your machine. See [Telegram channels](#telegram-channels).
 
 ---
 
@@ -563,6 +572,35 @@ If you have a [FYERS](https://fyers.in) account, the server can use live quotes 
 
 Today's token is kept in `~/.screener-mcp/fyers_token.json`, readable only by you. FYERS's free plan allows 5 data requests a second and 5,000 a day, with up to 50 symbols per quote request. The server batches symbols and reuses a quote for 5 seconds to stay well under that.
 
+### Telegram channels
+
+The server can read Telegram channels you have joined (private ones and forum topics included) and pick out the stocks they discuss, with the entry, stop loss, targets and timeframe each post gives, and every follow-up such as "T1 done", "SL hit", "exit" or "cancel". It signs in as you, reads only, and never posts, joins or marks anything as read. It is a research aid: it reports what the channel said, not whether to trade.
+
+1. **Create a Telegram app** at [my.telegram.org](https://my.telegram.org) → **API development tools**, to get an `api_id` and `api_hash`.
+2. **Store them in the Keychain** (each command prompts for the value):
+   ```bash
+   security add-generic-password -U -s screener-mcp -a telegram-api-id -w
+   security add-generic-password -U -s screener-mcp -a telegram-api-hash -w
+   ```
+3. **Install Telegram support** and restart the service:
+   ```bash
+   uv tool install --force 'screener-mcp[telegram] @ git+https://github.com/theinvincibles-ai/screener-mcp'
+   launchctl kickstart -k gui/$(id -u)/com.screener-mcp.http
+   ```
+4. **Sign in once** with [`scripts/macos/telegram.sh`](scripts/macos/telegram.sh), which reads the keys from the Keychain. Telegram sends a code to your Telegram app; type it (and your two-step password, if set) into Terminal only:
+   ```bash
+   ./telegram.sh login
+   ./telegram.sh channels                    # your channels, groups and forum topics, with ids
+   ./telegram.sh follow 1234567890            # every post in that channel
+   ./telegram.sh follow 2233445566 --topic 12 --topic 15   # only some topics of a forum group
+   ```
+
+The server pulls new posts every 15 minutes during market hours (8:45 AM to 4 PM IST, weekdays) and hourly otherwise, plus on demand when a tool is called. The first pull goes back 30 days. It re-reads the last 48 hours for edits and deletions: a deleted post is kept and marked, so a losing call removed later still counts.
+
+Everything stays in `~/.screener-mcp/telegram/` (owner-only): the sign-in session (`telegram.session`, which acts as your account, so keep it private), the followed channels, the posts (`messages.db`) and a weekly copy of NSE's symbol list used to spot tickers. Logs carry counts and ids, never message text or keys. To stop, run `./telegram.sh logout`, or end the session from Telegram's **Settings → Devices**.
+
+Stocks are found by NSE symbol (`#BEL`, `$BEL`, `NSE:BEL` or a capitalised `BEL`), or by company name. Add your own nicknames in `~/.screener-mcp/telegram/aliases.json`, e.g. `{"mazagon": "MAZDOCK"}`. Chart images and screenshots aren't read yet; their captions are.
+
 ---
 
 ## Docker
@@ -613,10 +651,11 @@ Then point the client at `http://<host>:8000/mcp`.
 screener-mcp/
 ├── run_server.py
 ├── scripts/canary.py               # Daily live check against Screener.in (see .github/workflows/canary.yml)
-├── scripts/macos/                  # launchd service + Keychain start script for the HTTP server
+├── scripts/macos/                  # launchd service + Keychain start scripts (HTTP server, Telegram CLI)
 ├── tests/                          # Offline tests (no network) + a real-page fixture
 └── src/screener_mcp/
-    ├── server.py                   # MCPServer (MCP SDK v2) — all 30 tool definitions
+    ├── server.py                   # MCPServer (MCP SDK v2) — all 34 tool definitions
+    ├── telegram_cli.py             # screener-mcp-telegram: sign-in, list and follow channels
     ├── client.py                   # Screener.in HTTP client + auth
     ├── core/
     │   ├── envelope.py             # Standard response envelope for every tool
@@ -630,6 +669,10 @@ screener-mcp/
     │   ├── oauth.py                # Single-user OAuth sign-in for the HTTP transport
     │   ├── history.py              # Year-by-year series, computed ROE / debt-to-equity, CAGR
     │   ├── valuation_history.py    # Year-end P/E and P/B from Screener's chart API
+    │   ├── telegram_client.py      # Read-only Telegram poller (Telethon, optional)
+    │   ├── telegram_store.py       # Local SQLite store for posts, edits, deletions
+    │   ├── telegram_extract.py     # Stocks, levels, timeframe and call events from posts
+    │   ├── telegram_symbols.py     # NSE symbol list for ticker matching
     │   ├── rag.py                  # PDF → chunk → embed → query pipeline
     │   └── vector_store.py         # ChromaDB wrapper
     ├── parsers/
@@ -651,7 +694,8 @@ screener-mcp/
         ├── research_tools.py       # Relative valuation, moat signals, forward outlook
         ├── commodities.py          # Commodity price analysis
         ├── notebook.py             # Research notes
-        └── portfolio.py            # Local portfolio tracker
+        ├── portfolio.py            # Local portfolio tracker
+        └── telegram_tools.py       # Telegram status + channel mentions
 ```
 
 ---

@@ -1,7 +1,7 @@
 """
 Screener.in MCP Server — Indian Stock Research Assistant
 
-Tools exposed to Claude (32 total):
+Tools exposed to Claude (34 total):
   search_company              — find a company by name or symbol
   get_company_overview        — key ratios, about, price data
   get_financials              — P&L / Balance Sheet / Cash Flow / Ratios history (incl. P/E, P/B, ROE, D/E)
@@ -34,6 +34,8 @@ Tools exposed to Claude (32 total):
   get_portfolio                — view holdings with live P&L and weights
   get_live_quote              — live FYERS quotes for up to 50 NSE symbols
   fyers_status                — is FYERS connected today, and the sign-in link if not
+  telegram_status             — is the Telegram channel reader set up, and what it has stored
+  get_channel_mentions        — stocks your Telegram channels discussed: calls, levels, updates
 
 Resources:
   screener://analyst-guide    — how to use this assistant
@@ -59,9 +61,14 @@ Run:
   Live prices (optional): FYERS_APP_ID and FYERS_SECRET_KEY from your own FYERS
   data-only API app; sign in daily at <MCP_PUBLIC_URL>/fyers/login (README:
   "Live prices from FYERS").
+
+  Telegram channels (optional): TELEGRAM_API_ID and TELEGRAM_API_HASH from
+  my.telegram.org, `pip install "screener-mcp[telegram]"`, then sign in once
+  with `screener-mcp-telegram login` (README: "Telegram channels").
 """
 
 import asyncio
+import contextlib
 import httpx
 import os
 import re
@@ -128,6 +135,11 @@ from .tools.portfolio import (
     get_portfolio as _get_portfolio,
 )
 from .tools.live_tools import get_live_quote as _get_live_quote, fyers_status as _fyers_status
+from .tools.telegram_tools import (
+    telegram_status as _telegram_status,
+    get_channel_mentions as _get_channel_mentions,
+)
+from .core import telegram_client as _telegram_client
 
 # Hard ceiling per tool call, so a hung upstream can't stall the conversation.
 _TOOL_TIMEOUT = float(os.getenv("SCREENER_TOOL_TIMEOUT", "240"))
@@ -239,6 +251,14 @@ def _read_only(title: str) -> ToolAnnotations:
     return ToolAnnotations(title=title, read_only_hint=True, open_world_hint=True)
 
 
+@contextlib.asynccontextmanager
+async def _lifespan(_server):
+    # Start the Telegram poller if it's set up. Idempotent, so a lifespan that
+    # runs per session still gives one poller per process.
+    _telegram_client.start_background_polling()
+    yield {}
+
+
 class ScreenerServer(MCPServer):
     """MCPServer that flags error envelopes as tool errors on the wire.
 
@@ -267,6 +287,7 @@ mcp = ScreenerServer(
     version=__version__,
     website_url="https://github.com/LogeshR15/screener-mcp",
     icons=[Icon(src="https://logeshr15.github.io/screener-mcp/icon-192.png", mime_type="image/png", sizes=["192x192"])],
+    lifespan=_lifespan,
     instructions="""
 You are an expert Indian equity analyst with deep knowledge of Indian stock markets,
 Screener.in data, and long-term investing principles.
@@ -1095,6 +1116,56 @@ async def fyers_status() -> dict[str, Any]:
       fyers_status()
     """
     return await _safe(_fyers_status)()
+
+
+# ─── Telegram channels (optional) ─────────────────────────────────────────────
+
+@mcp.tool(annotations=_read_only("Telegram Status"))
+async def telegram_status() -> dict[str, Any]:
+    """
+    Whether the Telegram channel reader is set up on this server: installed,
+    API keys present, signed in, which channels and forum topics are followed,
+    how many posts are stored, the last successful pull, any error or pause,
+    and the NSE symbol list used to spot stocks. If something is missing,
+    next_steps says exactly what the user should do on their Mac.
+
+    Call it when get_channel_mentions fails or the user asks whether their
+    Telegram channel is connected.
+
+    Examples:
+      telegram_status()
+    """
+    return await _safe(_telegram_status)()
+
+
+@mcp.tool(annotations=_read_only("Telegram Channel Mentions"))
+async def get_channel_mentions(days: int = 7, symbol: str = "", channel: str = "") -> dict[str, Any]:
+    """
+    Stocks discussed in the user's followed Telegram channels, with what was
+    said. Pulls new posts first if the last pull is over 5 minutes old.
+
+    For each stock: calls (posts that gave a trade: entry range, stop loss,
+    targets, timeframe, long/short, exactly as written) with every later
+    update attached (target hit, stop hit, exit, partial exit, cancellation,
+    trailed stop), updates whose original call wasn't found, and plain
+    mentions. Each item carries the post text, the time in IST and a t.me
+    link. Levels a post didn't state are null and listed in missing_fields,
+    never guessed. Deleted posts are kept and marked. Chart images aren't read.
+
+    This is the channel's view, not a recommendation. To judge a call, check it
+    with the other tools (live price, red flags, technicals) and say where the
+    data is incomplete.
+
+    days:    how far back to look, 1 to 90 (default 7).
+    symbol:  only this NSE symbol, e.g. "BEL" (optional).
+    channel: only channels whose title contains this text, or a channel id (optional).
+
+    Examples:
+      get_channel_mentions()
+      get_channel_mentions(days=30, symbol="BEL")
+      get_channel_mentions(days=1, channel="momentum")
+    """
+    return await _safe(_get_channel_mentions)(days, symbol, channel)
 
 
 # ─── Resources ────────────────────────────────────────────────────────────────

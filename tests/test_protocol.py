@@ -26,7 +26,7 @@ async def test_server_identity():
 async def test_context_param_is_hidden_from_tool_schemas():
     async with Client(server.mcp) as client:
         tools = (await client.list_tools()).tools
-        assert len(tools) == 32
+        assert len(tools) == 34
         for t in tools:
             assert "ctx" not in t.input_schema.get("properties", {}), t.name
             assert t.annotations is not None and t.annotations.title, t.name

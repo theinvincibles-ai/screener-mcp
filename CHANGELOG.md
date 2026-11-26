@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **Telegram channel reader (optional).** Reads the Telegram channels you have
+  joined (private ones and forum topics included) with your own account,
+  read-only, and stores the posts on your machine. Two new tools:
+  `telegram_status` and `get_channel_mentions`, which lists the stocks
+  discussed with each call's entry, stop, targets and timeframe exactly as
+  written, plus every later update (target or stop hit, exit, partial exit,
+  cancellation, trailed stop). Levels a post doesn't state are null, never
+  guessed; deleted posts are kept and marked so losing calls still count.
+  Sign in once with `screener-mcp-telegram login`; keys come from the Keychain
+  (`scripts/macos/telegram.sh`). New optional extra `[telegram]` (Telethon);
+  the core install is unchanged.
 - **Live prices from FYERS (optional).** With your own FYERS data-only API app
   (`FYERS_APP_ID`, `FYERS_SECRET_KEY`) on the claude.ai setup, two new tools,
   `get_live_quote` and `fyers_status`, give live quotes for up to 50 NSE

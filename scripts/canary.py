@@ -175,10 +175,25 @@ async def forward_outlook():
     _check(d.get("analyst_estimates") and d["analyst_estimates"]["years"], "no BEL analyst estimates")
 
 
+async def nse_symbol_list():
+    """The NSE equity CSV the Telegram reader uses to spot tickers still has its columns."""
+    import httpx
+
+    from screener_mcp.core.nse_client import NSE_HEADERS
+    from screener_mcp.core.telegram_symbols import SOURCES, parse_csv
+
+    async with httpx.AsyncClient(headers=NSE_HEADERS, timeout=30, follow_redirects=True) as client:
+        resp = await client.get(dict(SOURCES)["mainboard"])
+        resp.raise_for_status()
+    rows = parse_csv(resp.text)
+    _check(len(rows) > 1000, f"NSE equity list parsed to {len(rows)} rows (SYMBOL / NAME OF COMPANY columns changed?)")
+    _check(("TCS", "Tata Consultancy Services Limited") in rows, "TCS missing from NSE equity list")
+
+
 HARD = [overview_consolidated, overview_standalone_fallback, financial_tables, symbol_resolution,
         technical_screen, sector_compare, peers, relative_valuation, moat_signals, shareholding_and_pledge,
         sector_theme]
-SOFT = [nse_announcements, news_feed, analyst_consensus, forward_outlook]  # third-party feeds: warn, don't fail
+SOFT = [nse_announcements, news_feed, analyst_consensus, forward_outlook, nse_symbol_list]  # third-party feeds: warn, don't fail
 
 
 async def main() -> int:
