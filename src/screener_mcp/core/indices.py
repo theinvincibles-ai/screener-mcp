@@ -50,6 +50,32 @@ _ALIASES = {
     "technology": "it", "information technology": "it",
 }
 
+# Screener market codes (from the /market/IN08/IN0801/… breadcrumb) → index key,
+# most specific first. Screener renames its sector labels (Nov 2026 it dropped
+# "Information Technology" for "IT - Software"), but the codes stay put.
+_CODE_RULES: list[tuple[str, str]] = [
+    ("IN050102002", "private_bank"),
+    ("IN050102001", "psu_bank"),
+    ("IN050102", "bank"),
+    ("IN050103", "capital_markets"),
+    ("IN070201", "defence"),
+    ("IN060101", "pharma"),
+    ("IN0103", "metal"),
+    ("IN0101", "chemicals"),
+    ("IN0201", "auto"),
+    ("IN0202", "consumer_durables"),
+    ("IN0205", "realty"),
+    ("IN0701", "infrastructure"),
+    ("IN01", "commodities"),
+    ("IN03", "oil_gas"),
+    ("IN04", "fmcg"),
+    ("IN05", "financial_services"),
+    ("IN06", "healthcare"),
+    ("IN08", "it"),
+    ("IN10", "services"),
+    ("IN11", "energy"),
+]
+
 # Screener sector / industry labels (lower-cased substrings) → index key.
 # Checked most-specific first: industry labels before broad sector labels.
 _SECTOR_RULES: list[tuple[str, str]] = [
@@ -62,6 +88,11 @@ _SECTOR_RULES: list[tuple[str, str]] = [
     ("healthcare", "healthcare"),
     ("information technology", "it"),
     ("it - software", "it"),
+    ("computers - software", "it"),
+    ("diversified fmcg", "fmcg"),
+    ("ferrous metals", "metal"),
+    ("petroleum products", "oil_gas"),
+    ("telecom", "services"),
     ("automobile", "auto"),
     ("auto components", "auto"),
     ("fast moving consumer goods", "fmcg"),
@@ -96,8 +127,13 @@ def resolve_index(name: str) -> Optional[tuple[str, str, str, str]]:
     return None
 
 
-def sector_index_for(sectors: list[str]) -> Optional[tuple[str, str, str, str]]:
-    """Best sector benchmark for a company's Screener sector/industry labels."""
+def sector_index_for(sectors: list[str], market_codes: Optional[list[str]] = None) -> Optional[tuple[str, str, str, str]]:
+    """Best sector benchmark for a company: by its Screener market codes when
+    known (stable), else by its sector/industry labels."""
+    codes = market_codes or []
+    for prefix, key in _CODE_RULES:
+        if any(c.startswith(prefix) for c in codes):
+            return (key, *INDICES[key])
     labels = [s.lower() for s in sectors or []]
     for needle, key in _SECTOR_RULES:
         # industry (last label) is more specific — try it first

@@ -660,7 +660,7 @@ async def compare_to_sector(symbol: str, days: int = 30, benchmark: str = "") ->
         if not sector:
             raise ToolError(f"Unknown benchmark '{benchmark}'. Choose one of: {', '.join(INDICES)}.", "invalid_input")
     else:
-        sector = sector_index_for(ov.get("sectors", []))
+        sector = sector_index_for(ov.get("sectors", []), ov.get("market_codes", []))
         if not sector:
             sector = resolve_index("nifty500")
             warnings.append(

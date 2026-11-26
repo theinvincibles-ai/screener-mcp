@@ -12,6 +12,12 @@
   (`scripts/macos/`).
 
 ### Fixed
+- **Peer comparison failed with HTTP 405, and sector comparisons fell back to
+  Nifty 500.** Screener now renders the peer table in the company page (its
+  old AJAX endpoint answers 405) and renamed its industry breadcrumb (e.g.
+  "IT - Software" instead of "Information Technology"). Peers are read from the
+  page, and the sector index is picked from Screener's market codes, which
+  don't change when labels do. Found by the live canary.
 - **A damaged portfolio or notes file could wipe your data.** If
   `portfolio.json` or a note was unreadable (for example, cut off by a crash
   mid-save), it was treated as empty and the next save overwrote it. Such a file
