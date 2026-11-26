@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keeps screener-mcp's HTTP server running in the background on macOS.
+  Copy to ~/Library/LaunchAgents/, replace the two REPLACE_ME values, then:
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.screener-mcp.http.plist
+  Logs: /tmp/screener-mcp-http.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.screener-mcp.http</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <!-- Absolute path to scripts/macos/screener-http.sh, wherever you saved it -->
+    <string>REPLACE_ME/screener-http.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Your public https address, without /mcp -->
+    <key>MCP_PUBLIC_URL</key>
+    <string>https://REPLACE_ME.ts.net</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>/tmp/screener-mcp-http.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/screener-mcp-http.log</string>
+</dict>
+</plist>

@@ -501,11 +501,42 @@ Env vars:
 | `MCP_TRANSPORT` | `stdio` or `streamable-http` | `stdio` |
 | `PORT` / `MCP_PORT` | Port to listen on (HTTP transport only) | `8000` |
 | `MCP_HOST` | Bind address (HTTP transport only) | `127.0.0.1` (the Docker image sets `0.0.0.0`) |
+| `MCP_PUBLIC_URL` | Public `https://` address of the server, without `/mcp` (HTTP only). Setting it requires sign-in | — |
+| `MCP_AUTH_PASSPHRASE` | Turns on OAuth sign-in for the HTTP transport; at least 12 characters | — (no sign-in) |
 | `CHROMA_PERSIST_DIR` | Where the document-analysis vector store is cached | `~/.screener-mcp/chroma_db` |
 
 To get a public HTTPS URL, deploy this to any host that can run a long-lived Python process and terminate TLS for you (Render, Railway, Fly.io, a VM behind a reverse proxy, etc.), then point the client at `https://your-host/mcp`.
 
-> A bare `streamable-http` server has no authentication. If you deploy it publicly, put it behind your platform's access controls (API gateway, IP allowlist, auth proxy) rather than exposing it to the open internet unauthenticated — especially if you set `SCREENER_USERNAME`/`PASSWORD`, since anyone who can reach the URL would act as your Screener.in account.
+> Without `MCP_AUTH_PASSPHRASE`, a `streamable-http` server has no authentication. Don't expose it to the internet like that, especially if you set `SCREENER_USERNAME`/`PASSWORD`, since anyone who can reach the URL would act as your Screener.in account. Turn on sign-in as described below, or put it behind your platform's access controls.
+
+### Use from claude.ai (web and mobile)
+
+claude.ai custom connectors also appear in the Claude mobile apps. They connect over HTTPS and sign in with OAuth, so the server includes a small single-user OAuth sign-in: set `MCP_AUTH_PASSPHRASE` and `MCP_PUBLIC_URL`, and the first time you connect, a page asks for your passphrase. Clients then get 1-hour access tokens with rotating 30-day refresh tokens. Registered clients and *hashed* tokens are kept in `~/.screener-mcp/oauth.json`, so a restart doesn't sign you out. Five wrong passphrases lock sign-in for 15 minutes.
+
+**Running it on your own computer is the recommended setup.** NSE blocks most cloud IP addresses, so announcements, bulk deals and insider trades usually fail from a hosted server but work from a home connection. Your portfolio and notes also stay on your machine. The trade-off is that the connector is offline whenever the computer is off or asleep.
+
+Steps on macOS (other systems are similar):
+
+1. **Install the server** as a persistent command (from this repository, since the sign-in is not on PyPI yet):
+   ```bash
+   uv tool install 'git+https://github.com/theinvincibles-ai/screener-mcp'
+   ```
+2. **Get a public HTTPS address.** With [Tailscale](https://tailscale.com/kb/1223/funnel) (free, no domain needed), install it, sign in, then run `tailscale funnel --bg 8000`. It prints an address like `https://your-mac.tailnet-name.ts.net`. [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) works too if you have a domain on Cloudflare.
+3. **Store your secrets in the Keychain.** Each command prompts for the value. The Screener.in pair is optional:
+   ```bash
+   security add-generic-password -U -s screener-mcp -a auth-passphrase -w
+   security add-generic-password -U -s screener-mcp -a screener-username -w
+   security add-generic-password -U -s screener-mcp -a screener-password -w
+   ```
+4. **Run it in the background.** Copy [`scripts/macos/screener-http.sh`](scripts/macos/screener-http.sh) somewhere permanent, and copy [`scripts/macos/com.screener-mcp.http.plist`](scripts/macos/com.screener-mcp.http.plist) to `~/Library/LaunchAgents/`. Fill in its two `REPLACE_ME` values (the script path and your public address), then run:
+   ```bash
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.screener-mcp.http.plist
+   ```
+   It starts at login and restarts if it stops. Logs go to `/tmp/screener-mcp-http.log`.
+5. **Keep the Mac awake** on power: **System Settings → Battery → Options → Prevent automatic sleeping on power adapter when the display is off** (on a desktop Mac, the same option is under **Energy**). With the lid closed, a MacBook sleeps unless an external display is connected.
+6. **Add the connector** on claude.ai: **Settings → Connectors → Add custom connector**, paste `https://your-address/mcp` and click **Connect**. Sign in with your passphrase. It then shows up in the Claude mobile app too.
+
+To sign out every client, stop the server, delete `~/.screener-mcp/oauth.json` and start it again.
 
 ---
 
@@ -557,6 +588,7 @@ Then point the client at `http://<host>:8000/mcp`.
 screener-mcp/
 ├── run_server.py
 ├── scripts/canary.py               # Daily live check against Screener.in (see .github/workflows/canary.yml)
+├── scripts/macos/                  # launchd service + Keychain start script for the HTTP server
 ├── tests/                          # Offline tests (no network) + a real-page fixture
 └── src/screener_mcp/
     ├── server.py                   # MCPServer (MCP SDK v2) — all 30 tool definitions
@@ -570,6 +602,7 @@ screener-mcp/
     │   ├── yahoo.py                # Yahoo Finance session (consensus targets, estimates)
     │   ├── industry.py             # Industry pages → medians, revenue share, HHI
     │   ├── nse_client.py           # NSE India API (announcements, filings)
+    │   ├── oauth.py                # Single-user OAuth sign-in for the HTTP transport
     │   ├── history.py              # Year-by-year series, computed ROE / debt-to-equity, CAGR
     │   ├── valuation_history.py    # Year-end P/E and P/B from Screener's chart API
     │   ├── rag.py                  # PDF → chunk → embed → query pipeline

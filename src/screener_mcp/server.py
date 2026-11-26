@@ -50,6 +50,9 @@ Setup:
 Run:
   python -m screener_mcp.server
   or via Claude Code MCP config (see README).
+
+  As a claude.ai connector (web/mobile): MCP_TRANSPORT=streamable-http plus
+  MCP_PUBLIC_URL and MCP_AUTH_PASSPHRASE to turn on sign-in (README: "Use from claude.ai").
 """
 
 import asyncio
@@ -60,10 +63,14 @@ from typing import Any
 from pathlib import Path
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
+from urllib.parse import urlparse
+
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import Icon, InputRequiredResult, ToolAnnotations
 from .core.envelope import ToolError, error_envelope, to_envelope
 from .core.nse_client import NSEError
+from .core.oauth import LOGIN_PATH, auth_from_env, check_http_auth_env
 from .tools.company_tools import (
     search_company as _search_company,
     get_company_overview as _get_overview,
@@ -212,6 +219,10 @@ except PackageNotFoundError:  # running from a source checkout without install
 HTTP_HOST = os.getenv("MCP_HOST", "127.0.0.1")
 # Prefer generic PORT/MCP_PORT env vars used by most hosts (Render, Railway, Fly.io, etc.).
 HTTP_PORT = int(os.getenv("PORT") or os.getenv("MCP_PORT") or "8000")
+# Optional single-user OAuth sign-in for the HTTP transport, so claude.ai (web
+# and mobile) can connect safely. Off unless MCP_AUTH_PASSPHRASE and
+# MCP_PUBLIC_URL are set; stdio is never affected.
+_AUTH = auth_from_env()
 
 
 def _read_only(title: str) -> ToolAnnotations:
@@ -239,6 +250,8 @@ class ScreenerServer(MCPServer):
 
 mcp = ScreenerServer(
     "screener-mcp",
+    auth_server_provider=_AUTH[0] if _AUTH else None,
+    auth=_AUTH[1] if _AUTH else None,
     title="Screener Stock Research",
     description="Indian stock research (BSE/NSE) powered by Screener.in: fundamentals, screens, "
     "shareholding, filings and earnings-call search.",
@@ -1242,6 +1255,25 @@ def value_screen(min_roce: float = 15, max_pe: float = 20) -> str:
     )
 
 
+if _AUTH:
+    mcp.custom_route(LOGIN_PATH, methods=["GET", "POST"], include_in_schema=False)(_AUTH[0].login)
+
+
+def _http_transport_security() -> TransportSecuritySettings | None:
+    """Accept the public hostname when the server sits behind a tunnel or proxy.
+
+    On loopback the SDK only accepts Host: localhost, which rejects every request
+    a tunnel forwards with the public name. None keeps the SDK default."""
+    public_url = os.getenv("MCP_PUBLIC_URL", "").rstrip("/")
+    if not public_url:
+        return None
+    return TransportSecuritySettings(
+        allowed_hosts=[urlparse(public_url).netloc, "127.0.0.1:*", "localhost:*", "[::1]:*"],
+        allowed_origins=[public_url, "https://claude.ai", "https://claude.com",
+                         "http://127.0.0.1:*", "http://localhost:*"],
+    )
+
+
 # ─── Entry point ──────────────────────────────────────────────────────────────
 
 def main():
@@ -1252,7 +1284,9 @@ def main():
     if transport == "stdio":
         mcp.run()
     elif transport == "streamable-http":
-        mcp.run("streamable-http", host=HTTP_HOST, port=HTTP_PORT)
+        if problem := check_http_auth_env():
+            raise SystemExit(problem)
+        mcp.run("streamable-http", host=HTTP_HOST, port=HTTP_PORT, transport_security=_http_transport_security())
     elif transport == "sse":  # legacy transport, kept for older clients
         mcp.run("sse", host=HTTP_HOST, port=HTTP_PORT)
     else:
