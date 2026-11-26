@@ -12,6 +12,11 @@
   (`scripts/macos/`).
 
 ### Fixed
+- **A damaged portfolio or notes file could wipe your data.** If
+  `portfolio.json` or a note was unreadable (for example, cut off by a crash
+  mid-save), it was treated as empty and the next save overwrote it. Such a file
+  is now an error that changes nothing and points to the backup. Saves are
+  atomic, and the previous version is kept as `<file>.bak`.
 - **Consolidated → standalone fallback stopped working** for companies without
   subsidiaries (e.g. MSUMI), so the overview came back with price, market cap
   and every ratio missing. Screener now fills their consolidated page with

@@ -4,13 +4,13 @@ Research notebook — save, read, and summarize stock research notes locally.
 Notes stored as JSON in ~/.screener-mcp/notebooks/{SYMBOL}/{note_id}.json
 """
 
-import json
 import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 from ..core.envelope import ToolError
+from ..core.local_store import read_json, write_json
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +28,27 @@ def _find_note(note_id: str) -> Path | None:
 
 
 def _load(path: Path) -> dict:
+    """A note, for reading or changing it. Raises if the file is unreadable,
+    so an append can't overwrite a damaged note with a single entry."""
+    note = read_json(path, {})
+    if not isinstance(note, dict):
+        raise ToolError(f"{path} doesn't look like a research note, so nothing was changed.",
+                        "local_data_unreadable", path=str(path))
+    return note
+
+
+def _load_or_none(path: Path) -> dict | None:
+    """A note for listing/summarizing; None (and a log line) if it's unreadable,
+    so one damaged note doesn't hide all the others."""
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+        return _load(path)
+    except ToolError as e:
+        logger.warning(e.message)
+        return None
 
 
 def _save(path: Path, data: dict):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_json(path, data)
 
 
 def _now() -> str:
@@ -131,14 +143,18 @@ async def notebook_ai(
                 f"Start with: `notebook_ai('create', symbol='SYMBOL', content='Your research...')`"
             )
 
-        notes = []
+        notes, unreadable = [], []
         for p in sorted(search_root.rglob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True):
-            n = _load(p)
+            n = _load_or_none(p)
             if n:
                 notes.append(n)
+            elif n is None:
+                unreadable.append(p.stem)
 
+        skipped = (f"\n\n**{len(unreadable)} note(s) could not be read and were skipped:** "
+                   f"{', '.join(unreadable)}. A .bak copy of each sits next to it.") if unreadable else ""
         if not notes:
-            return "**No notes found.**"
+            return "**No notes found.**" + skipped
 
         lines = [f"# Research Notebook — {len(notes)} notes", ""]
         for n in notes[:60]:
@@ -149,7 +165,7 @@ async def notebook_ai(
             preview = (n.get("entries") or [{}])[0].get("text", "")[:60].replace("\n", " ")
             lines.append(f"[{nid}] {sym:<8} | {updated} | {count} entries | {preview}...")
 
-        return "\n".join(lines)
+        return "\n".join(lines) + skipped
 
     # ── summarize ─────────────────────────────────────────────────────────────
     if action == "summarize":
@@ -159,16 +175,21 @@ async def notebook_ai(
         if not search_dir.exists():
             return f"**No notes found for {symbol.upper()}.**"
 
-        all_entries = []
+        all_entries, unreadable = [], []
         for p in sorted(search_dir.rglob("*.json"), key=lambda x: x.stat().st_mtime):
-            n = _load(p)
+            n = _load_or_none(p)
+            if n is None:
+                unreadable.append(p.stem)
+                continue
             for e in n.get("entries", []):
                 all_entries.append(f"[{e.get('timestamp', '')[:10]}] {e.get('text', '')}")
 
+        skipped = (f"\n\n**{len(unreadable)} note(s) could not be read and are missing from this summary:** "
+                   f"{', '.join(unreadable)}.") if unreadable else ""
         if not all_entries:
-            return f"**No note content found for {symbol.upper()}.**"
+            return f"**No note content found for {symbol.upper()}.**" + skipped
 
-        combined = "\n\n---\n\n".join(all_entries)
+        combined = "\n\n---\n\n".join(all_entries) + skipped
         return f"""# Research Notes — {symbol.upper()} ({len(all_entries)} entries)
 
 {combined}
@@ -191,7 +212,7 @@ async def notebook_ai(
         path = _find_note(note_id)
         if not path:
             raise ToolError(f"Note {note_id} not found.", "not_found")
-        note = _load(path)
+        note = _load_or_none(path) or {}  # a damaged note can still be deleted
         path.unlink()
         return f"**Note `{note_id}` deleted.** (was: {note.get('symbol', '?')} — {note.get('updated_at', '')[:10]})"
 
