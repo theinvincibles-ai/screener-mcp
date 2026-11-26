@@ -1,19 +1,20 @@
 """
 Local portfolio tracking — holdings, average cost, and live P&L.
 
-Stored as a single JSON file at ~/.screener-mcp/portfolio.json. No account or
+Stored as a single JSON file at ~/.screener-mcp/portfolio.json (previous
+version kept as portfolio.json.bak). No account or
 network service required; this is purely local state for the long-term
 investor use case (Tapetide gates the equivalent behind a paid account).
 """
 
 import asyncio
-import json
 import logging
 from pathlib import Path
 from typing import Optional
 
 from ..core.company_page import fetch_company_page
 from ..core.envelope import ToolError, ToolResult
+from ..core.local_store import read_json, write_json
 from ..parsers.company import parse_overview
 
 logger = logging.getLogger(__name__)
@@ -22,19 +23,17 @@ _PORTFOLIO_PATH = Path.home() / ".screener-mcp" / "portfolio.json"
 
 
 def _load() -> dict:
-    if not _PORTFOLIO_PATH.exists():
-        return {"holdings": {}}
-    try:
-        data = json.loads(_PORTFOLIO_PATH.read_text(encoding="utf-8"))
-        data.setdefault("holdings", {})
-        return data
-    except Exception:
-        return {"holdings": {}}
+    data = read_json(_PORTFOLIO_PATH, {"holdings": {}})
+    if not isinstance(data, dict) or not isinstance(data.setdefault("holdings", {}), dict):
+        raise ToolError(
+            f"{_PORTFOLIO_PATH} doesn't look like a portfolio file, so nothing was changed.",
+            "local_data_unreadable", path=str(_PORTFOLIO_PATH),
+        )
+    return data
 
 
 def _save(data: dict):
-    _PORTFOLIO_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _PORTFOLIO_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    write_json(_PORTFOLIO_PATH, data)
 
 
 def _parse_num(value) -> Optional[float]:
