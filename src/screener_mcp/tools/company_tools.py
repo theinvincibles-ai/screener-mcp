@@ -5,7 +5,10 @@ that Claude can read naturally.
 """
 
 import asyncio
+import logging
 from typing import Literal
+
+import httpx
 
 from ..client import get_client
 from ..core import history as hist
@@ -39,6 +42,8 @@ from ..parsers.company import (
     pledged_pct,
     split_ttm,
 )
+
+logger = logging.getLogger(__name__)
 
 
 FinancialType = Literal["consolidated", "standalone"]
@@ -348,16 +353,20 @@ async def get_shareholding(symbol: str) -> ToolResult:
 
 async def peers_data(page: CompanyPage) -> tuple[dict, list[str], str | None]:
     """Peer table → (data, missing, reason)."""
-    client = await get_client()
-    # Screener.in's real peer table is loaded client-side via an AJAX call
-    # keyed on the company's "warehouse id" (distinct from its numeric id):
-    #   GET /api/company/{warehouse_id}/peers/
-    warehouse_id = parse_warehouse_id(page.html)
-    peers: list[dict[str, str]] = []
-    if warehouse_id:
-        peers = parse_peers_ajax(await client.get_html(f"/api/company/{warehouse_id}/peers/"))
-    if not peers:
-        peers = parse_peers(page.html)
+    # Since Nov 2026 Screener renders the peer table in the company page, and
+    # the old AJAX endpoint (/api/company/{warehouse_id}/peers/) answers 405.
+    # Use the page first; keep the endpoint only as a fallback for old layouts.
+    peers = parse_peers(page.html)
+    if not any(p.get("Name") and not p.get("_note") and "Sector Level" not in p for p in peers):
+        warehouse_id = parse_warehouse_id(page.html)
+        if warehouse_id:
+            client = await get_client()
+            try:
+                ajax = parse_peers_ajax(await client.get_html(f"/api/company/{warehouse_id}/peers/"))
+            except httpx.HTTPStatusError as e:
+                logger.warning(f"Peer endpoint failed for {page.symbol}: {e}")
+                ajax = []
+            peers = ajax or peers
 
     sectors = [p for p in peers if "Sector Level" in p]
     rows = [p for p in peers if not p.get("_note") and "Sector Level" not in p]

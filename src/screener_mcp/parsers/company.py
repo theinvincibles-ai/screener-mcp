@@ -149,13 +149,19 @@ def parse_overview(html: str) -> dict[str, Any]:
             about = _clean(p.get_text())
 
     # Sector / industry from market breadcrumb links (Screener renders these in
-    # the peer-comparison section as <a href="/market/…" title="Sector|Industry">)
-    sectors = []
+    # the peer-comparison section as <a href="/market/IN08/IN0801/…" title="…">).
+    # Older pages titled them Broad Sector / Sector / Industry; since Nov 2026
+    # they are Broad Industry / Industry. The path codes are kept too: they map
+    # to sectors more reliably than the labels, which Screener renames.
+    sectors, market_codes = [], []
     for a in soup.select('a[href*="/market/"]'):
-        if a.get("title", "") in {"Sector", "Industry"}:
+        if a.get("title", "") in {"Sector", "Broad Industry", "Industry"}:
             text = _clean(a.get_text())
             if text and text not in sectors:
                 sectors.append(text)
+            code = a.get("href", "").rstrip("/").rsplit("/", 1)[-1]
+            if re.fullmatch(r"IN\d+", code) and code not in market_codes:
+                market_codes.append(code)
 
     # Top ratios — special-case "High / Low" which has two separate number spans
     ratios: dict[str, str] = {}
@@ -189,6 +195,7 @@ def parse_overview(html: str) -> dict[str, Any]:
         "nse_code": nse,
         "about": about,
         "sectors": sectors,
+        "market_codes": market_codes,
         "current_price": price,
         "52_week_high": high_52,
         "52_week_low": low_52,
@@ -353,14 +360,56 @@ def parse_peers_ajax(html: str) -> list[dict[str, str]]:
     return rows
 
 
+def _peer_cell_text(cell: Tag) -> str:
+    """A peer-table cell's own text, without its hover tooltip and source link."""
+    for tip in cell.select(".tooltip"):
+        tip.decompose()
+    return _clean(cell.get_text(" "))
+
+
+def _peer_header(th: Tag) -> str:
+    """'CMP' + unit 'Rs.' → 'CMP Rs.' (the names the old AJAX table used)."""
+    name = th.select_one(".underline-link")
+    if not name:
+        return _peer_cell_text(th)
+    unit = th.select_one(".ink-600")
+    unit_text = _clean(unit.get_text()) if unit else ""
+    return f"{_clean(name.get_text())} {unit_text}".strip()
+
+
+def parse_peers_table(table: Tag) -> list[dict[str, str]]:
+    """
+    The peer table as Screener renders it in the company page (Nov 2026 on):
+    the header row is the first <tbody> row, made of <th> cells whose labels
+    carry tooltips; a leading checkbox column; "Key insights" cells with a
+    tooltip and source link; the median row in <tfoot>. "Company" is renamed
+    "Name" to keep the shape of the older AJAX table.
+    """
+    body_rows = table.select("tbody tr")
+    header_row = next((tr for tr in body_rows if tr.find("th") and not tr.find("td")), None)
+    if header_row is None:
+        return []
+    headers = [_peer_header(th) for th in header_row.find_all("th")]
+    headers = ["Name" if h == "Company" else h for h in headers]
+
+    rows = []
+    for tr in [r for r in body_rows if r is not header_row] + table.select("tfoot tr"):
+        cells = [_peer_cell_text(td) for td in tr.find_all("td")]
+        if not cells:
+            continue
+        row = {h: (cells[i] if i < len(cells) else "") for i, h in enumerate(headers) if h}
+        if row.get("Name"):
+            rows.append(row)
+    return rows
+
+
 def parse_peers(html: str) -> list[dict[str, str]]:
     """
     Parse the peer comparison table from a full company page.
 
-    Screener.in loads the peer table via AJAX after page load, so the initial
-    HTML contains only the sector breadcrumb context, not the actual rows.
-    Prefer `parse_peers_ajax` (against the AJAX endpoint) for real peer data —
-    this function only returns sector breadcrumb context as a fallback.
+    Screener now renders the table in the page (parse_peers_table). Older
+    layouts loaded it via AJAX and left only the sector breadcrumb here; in
+    that case this returns the breadcrumb as context.
     """
     soup = BeautifulSoup(html, "lxml")
     section = soup.find(id="peers")
@@ -369,7 +418,7 @@ def parse_peers(html: str) -> list[dict[str, str]]:
 
     table = section.find("table")
     if table:
-        return _table_to_list(table)
+        return parse_peers_table(table) or _table_to_list(table)
 
     # Table not present (AJAX-loaded) — extract sector breadcrumb as context
     breadcrumb = []

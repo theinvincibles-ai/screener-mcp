@@ -980,3 +980,52 @@ async def test_tool_calls_time_out_with_structured_error(monkeypatch):
 
     env = await server._safe(slow)()
     assert env["status"] == "error" and env["error"]["type"] == "timeout"
+
+
+# ─── Nov 2026 layout: peer table in the page, new industry breadcrumb ─────────
+
+def _tcs_peers_html() -> str:
+    from pathlib import Path
+    return (Path(__file__).parent / "fixtures" / "tcs_peers_section.html").read_text(encoding="utf-8")
+
+
+def test_peer_table_rendered_in_page_is_parsed_without_tooltips():
+    from screener_mcp.parsers.company import parse_peers
+
+    rows = parse_peers(_tcs_peers_html())
+    assert [r["Name"] for r in rows] == ["TCS", "Infosys", "Median: 7 Co."]
+    assert rows[0]["CMP Rs."] == "2640.30"
+    assert rows[0]["P/E"] == "17.50"
+    assert rows[0]["Mar Cap Rs.Cr."] == "956157.27"
+    assert rows[1]["ROCE %"] == "39.95"
+    assert rows[0]["Order TCV USD billion"] == "40.70"   # tooltip and "Source" link stripped
+    assert rows[2]["CMP Rs."] == "1854.70"
+
+
+async def test_peers_use_page_table_and_skip_the_dead_ajax_endpoint(fake_pages, monkeypatch):
+    from screener_mcp import client as client_mod
+
+    fake_pages[("TCS", "consolidated")] = _tcs_peers_html()
+
+    async def no_network(*a, **k):
+        raise AssertionError("the peer table is in the page; no extra request expected")
+
+    monkeypatch.setattr(client_mod.ScreenerClient, "get_html", no_network)
+    env = await server.get_peer_comparison("TCS")
+    assert env["status"] == "ok"
+    assert [r["Name"] for r in env["data"]["rows"]][:2] == ["TCS", "Infosys"]
+    assert env["data"]["rows"][0]["P/E"] == 17.5
+
+
+def test_new_industry_breadcrumb_maps_to_sector_index():
+    from screener_mcp.core.indices import sector_index_for
+    from screener_mcp.parsers.company import parse_overview
+
+    ov = parse_overview(_tcs_peers_html())
+    assert ov["sectors"] == ["IT - Software", "Computers - Software & Consulting"]
+    assert ov["market_codes"] == ["IN080101", "IN080101001"]
+    assert sector_index_for(ov["sectors"], ov["market_codes"])[0] == "it"
+    # codes win over labels, most specific first
+    assert sector_index_for([], ["IN050102", "IN050102002"])[0] == "private_bank"
+    assert sector_index_for([], ["IN070201", "IN070201001"])[0] == "defence"
+    assert sector_index_for(["Diversified FMCG"])[0] == "fmcg"

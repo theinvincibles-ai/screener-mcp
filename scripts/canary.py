@@ -115,7 +115,10 @@ async def sector_compare():
 
 async def peers():
     d = _ok(await server.get_peer_comparison("TCS"), "peers")
-    _check(len(d.get("rows", [])) >= 3, "peer table empty")
+    rows = d.get("rows", [])
+    _check(len(rows) >= 3, "peer table empty")
+    # headers parsed without their tooltips, values as numbers
+    _check(any(isinstance(r.get("P/E"), (int, float)) for r in rows), "peer table has no numeric P/E column")
 
 
 async def nse_announcements():
