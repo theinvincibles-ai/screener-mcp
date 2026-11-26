@@ -85,7 +85,7 @@ If these return real data, the server is working end to end.
 - **Market & research** — commodity price context, local research notes
 - **Portfolio** — a private, local holdings tracker with live P&L
 
-30 tools in total — full reference [below](#tools--30-total). Every tool returns the same [response envelope](#response-envelope), so partial or degraded data is always explicit.
+32 tools in total — full reference [below](#tools--32-total). Every tool returns the same [response envelope](#response-envelope), so partial or degraded data is always explicit.
 
 Two prompts — `deep_dive(symbol)` and `value_screen(min_roce, max_pe)` — package common research workflows; clients that support MCP prompts show them as slash commands.
 
@@ -191,7 +191,7 @@ Claude Desktop does **not** inherit your shell environment, so credentials must 
 
 **4.** Quit Claude Desktop completely (**Cmd+Q** on macOS) and reopen it.
 
-**5.** Check the tools icon in the message composer — `screener` should list its 30 tools. Then ask: `"Search for Asian Paints"`.
+**5.** Check the tools icon in the message composer — `screener` should list its 32 tools. Then ask: `"Search for Asian Paints"`.
 
 > Server not showing up? Check **Settings → Developer** for its status, and the logs at `~/Library/Application Support/Claude/logs/mcp-server-screener.log` (macOS) or `%APPDATA%\Claude\logs\` (Windows). Invalid JSON — often a stray trailing comma — makes Claude Desktop skip every server silently.
 
@@ -278,7 +278,7 @@ Never commit real credentials — the values above are placeholders.
 
 ---
 
-## Tools — 30 total
+## Tools — 32 total
 
 Grouped by category. See [Example workflows](#example-workflows) for the ones you'll reach for most.
 
@@ -345,6 +345,15 @@ Grouped by category. See [Example workflows](#example-workflows) for the ones yo
 | `get_portfolio` | View holdings with live price, P&L (₹ and %), and weight | No |
 
 > Stored locally at `~/.screener-mcp/portfolio.json` — no account, no external service, nothing leaves your machine.
+
+### Live prices (FYERS, optional)
+
+| Tool | What it does | Login needed |
+|------|-------------|:---:|
+| `get_live_quote` | Live price, day change, OHLC, volume and quote time for up to 50 NSE symbols | FYERS |
+| `fyers_status` | Whether FYERS is signed in today, until when, and the sign-in link | FYERS |
+
+> With FYERS connected, `get_portfolio` and `get_company_overview` also use live prices. See [Live prices from FYERS](#live-prices-from-fyers).
 
 ---
 
@@ -503,6 +512,7 @@ Env vars:
 | `MCP_HOST` | Bind address (HTTP transport only) | `127.0.0.1` (the Docker image sets `0.0.0.0`) |
 | `MCP_PUBLIC_URL` | Public `https://` address of the server, without `/mcp` (HTTP only). Setting it requires sign-in | — |
 | `MCP_AUTH_PASSPHRASE` | Turns on OAuth sign-in for the HTTP transport; at least 12 characters | — (no sign-in) |
+| `FYERS_APP_ID` / `FYERS_SECRET_KEY` | Your FYERS data-only API app, for live prices (needs sign-in and `MCP_PUBLIC_URL`) | — (no live prices) |
 | `CHROMA_PERSIST_DIR` | Where the document-analysis vector store is cached | `~/.screener-mcp/chroma_db` |
 
 To get a public HTTPS URL, deploy this to any host that can run a long-lived Python process and terminate TLS for you (Render, Railway, Fly.io, a VM behind a reverse proxy, etc.), then point the client at `https://your-host/mcp`.
@@ -537,6 +547,21 @@ Steps on macOS (other systems are similar):
 6. **Add the connector** on claude.ai: **Settings → Connectors → Add custom connector**, paste `https://your-address/mcp` and click **Connect**. Sign in with your passphrase. It then shows up in the Claude mobile app too.
 
 To sign out every client, stop the server, delete `~/.screener-mcp/oauth.json` and start it again.
+
+### Live prices from FYERS
+
+If you have a [FYERS](https://fyers.in) account, the server can use live quotes from it instead of Screener's delayed price. It only calls FYERS's quote endpoints, and the app you create can't place orders. This needs the claude.ai setup above, because FYERS sends you back to your server's public address after you sign in.
+
+1. **Create a data-only app** in the [FYERS API dashboard](https://fyers.in/web/api-dashboard/user-apps): **Create non-trading app**, any name, and set the **Redirect URL** to `https://your-address/fyers/callback`.
+2. **Store the App ID and secret** in the Keychain (each command prompts for the value), then restart the service:
+   ```bash
+   security add-generic-password -U -s screener-mcp -a fyers-app-id -w
+   security add-generic-password -U -s screener-mcp -a fyers-secret -w
+   launchctl kickstart -k gui/$(id -u)/com.screener-mcp.http
+   ```
+3. **Sign in once a day** at `https://your-address/fyers/login`. FYERS tokens expire every day at 6:30 AM IST. The page asks for your connector passphrase, then sends you to FYERS's own login, so your FYERS password never reaches the server. When you're not signed in, tools say so and give this link, and fall back to Screener's delayed price.
+
+Today's token is kept in `~/.screener-mcp/fyers_token.json`, readable only by you. FYERS's free plan allows 5 data requests a second and 5,000 a day, with up to 50 symbols per quote request. The server batches symbols and reuses a quote for 5 seconds to stay well under that.
 
 ---
 

@@ -17,6 +17,7 @@ from ..core.envelope import ToolError, ToolResult
 from ..core.numbers import blank_to_none, to_number
 from ..core.technicals import price_freshness
 from ..core.valuation_history import fetch_multiples, value_at_year_end
+from .live_tools import live_prices
 from ..core.quality import (
     OVERVIEW_CORE_FIELDS,
     annotate_rows,
@@ -128,6 +129,14 @@ async def get_company_overview(symbol: str, financial_type: FinancialType = "con
             data["price_freshness"] = freshness
             if freshness.get("stale"):
                 warnings.append(freshness["stale_note"])
+    # Live FYERS price beside Screener's, when connected (NSE-listed only).
+    nse = (ov.get("nse_code") or "").strip()
+    if nse:
+        live, note = await live_prices([nse])
+        if nse.upper() in live:
+            data["live_quote"] = live[nse.upper()]
+        elif note:
+            warnings.append(note)
     return page_result(page, data, warnings=warnings, missing=missing, reason=reason)
 
 

@@ -1,7 +1,7 @@
 """
 Screener.in MCP Server — Indian Stock Research Assistant
 
-Tools exposed to Claude (30 total):
+Tools exposed to Claude (32 total):
   search_company              — find a company by name or symbol
   get_company_overview        — key ratios, about, price data
   get_financials              — P&L / Balance Sheet / Cash Flow / Ratios history (incl. P/E, P/B, ROE, D/E)
@@ -32,6 +32,8 @@ Tools exposed to Claude (30 total):
   update_portfolio_stock      — correct quantity/avg price on an existing holding
   remove_portfolio_stock      — remove a holding entirely
   get_portfolio                — view holdings with live P&L and weights
+  get_live_quote              — live FYERS quotes for up to 50 NSE symbols
+  fyers_status                — is FYERS connected today, and the sign-in link if not
 
 Resources:
   screener://analyst-guide    — how to use this assistant
@@ -53,6 +55,10 @@ Run:
 
   As a claude.ai connector (web/mobile): MCP_TRANSPORT=streamable-http plus
   MCP_PUBLIC_URL and MCP_AUTH_PASSPHRASE to turn on sign-in (README: "Use from claude.ai").
+
+  Live prices (optional): FYERS_APP_ID and FYERS_SECRET_KEY from your own FYERS
+  data-only API app; sign in daily at <MCP_PUBLIC_URL>/fyers/login (README:
+  "Live prices from FYERS").
 """
 
 import asyncio
@@ -71,6 +77,8 @@ from mcp.types import Icon, InputRequiredResult, ToolAnnotations
 from .core.envelope import ToolError, error_envelope, to_envelope
 from .core.nse_client import NSEError
 from .core.oauth import LOGIN_PATH, auth_from_env, check_http_auth_env
+from .core.fyers import CALLBACK_PATH as FYERS_CALLBACK_PATH, LOGIN_START_PATH as FYERS_LOGIN_PATH
+from .core.fyers_routes import make_routes as make_fyers_routes
 from .tools.company_tools import (
     search_company as _search_company,
     get_company_overview as _get_overview,
@@ -119,6 +127,7 @@ from .tools.portfolio import (
     remove_portfolio_stock as _remove_portfolio_stock,
     get_portfolio as _get_portfolio,
 )
+from .tools.live_tools import get_live_quote as _get_live_quote, fyers_status as _fyers_status
 
 # Hard ceiling per tool call, so a hung upstream can't stall the conversation.
 _TOOL_TIMEOUT = float(os.getenv("SCREENER_TOOL_TIMEOUT", "240"))
@@ -1040,14 +1049,52 @@ async def get_portfolio() -> dict[str, Any]:
     """
     View your portfolio with live prices, P&L, and per-holding weight.
 
-    Fetches the current price for each holding from Screener.in and computes
-    invested value, current value, gain/loss (₹ and %), and each position's
-    weight in the total portfolio.
+    Prices come from FYERS when it's connected (live, one request), otherwise
+    from Screener.in per holding (delayed); each holding's price_source says
+    which. Computes invested value, current value, gain/loss (₹ and %), and
+    each position's weight in the total portfolio.
 
     Examples:
       get_portfolio()
     """
     return await _safe(_get_portfolio)()
+
+
+# ─── Live prices (FYERS) ──────────────────────────────────────────────────────
+
+@mcp.tool(annotations=_read_only("Get Live Quote"))
+async def get_live_quote(symbols: list[str]) -> dict[str, Any]:
+    """
+    Live prices from FYERS for up to 50 NSE stocks at once: last traded price,
+    day change (₹ and %), open, high, low, previous close, volume and the
+    quote time in IST. Use it when the user wants the price right now; other
+    tools' prices come from Screener.in and can lag.
+
+    symbols: NSE symbols, e.g. ["TCS", "INFY"]. A symbol already in FYERS form
+             (e.g. "NSE:NIFTY50-INDEX") is passed through as is.
+
+    Needs FYERS set up on the server and signed in today (tokens expire daily
+    at 6:30 AM IST). If not, the error says so and gives the sign-in link to
+    show the user. A symbol FYERS doesn't know is listed in missing_fields;
+    a price more than 20% from the previous close is flagged in warnings.
+
+    Examples:
+      get_live_quote(["TCS", "INFY", "HDFCBANK"])
+    """
+    return await _safe(_get_live_quote)(symbols)
+
+
+@mcp.tool(annotations=_read_only("FYERS Status"))
+async def fyers_status() -> dict[str, Any]:
+    """
+    Whether live FYERS prices are set up and signed in for today, until when
+    (IST), and the sign-in link to give the user if not. Call it when a live
+    price is missing or the user asks if FYERS is connected.
+
+    Examples:
+      fyers_status()
+    """
+    return await _safe(_fyers_status)()
 
 
 # ─── Resources ────────────────────────────────────────────────────────────────
@@ -1257,6 +1304,10 @@ def value_screen(min_roce: float = 15, max_pe: float = 20) -> str:
 
 if _AUTH:
     mcp.custom_route(LOGIN_PATH, methods=["GET", "POST"], include_in_schema=False)(_AUTH[0].login)
+    # Daily FYERS sign-in, behind the same passphrase (core/fyers_routes.py).
+    _fyers_login, _fyers_callback = make_fyers_routes(_AUTH[0])
+    mcp.custom_route(FYERS_LOGIN_PATH, methods=["GET", "POST"], include_in_schema=False)(_fyers_login)
+    mcp.custom_route(FYERS_CALLBACK_PATH, methods=["GET"], include_in_schema=False)(_fyers_callback)
 
 
 def _http_transport_security() -> TransportSecuritySettings | None:
