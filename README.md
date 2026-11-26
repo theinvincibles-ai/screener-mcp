@@ -6,10 +6,10 @@ An MCP (Model Context Protocol) server that gives Claude live access to [Screene
 
 [![PyPI](https://img.shields.io/pypi/v/screener-mcp)](https://pypi.org/project/screener-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/screener-mcp)](https://pypi.org/project/screener-mcp/)
-[![CI](https://github.com/LogeshR15/screener-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/LogeshR15/screener-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/theinvincibles-ai/screener-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/theinvincibles-ai/screener-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-[Report an issue](https://github.com/LogeshR15/screener-mcp/issues) · [LinkedIn](https://linkedin.com/in/logesh-ramasamy/) · logeshl2003@gmail.com
+[Report an issue](https://github.com/theinvincibles-ai/screener-mcp/issues) · Fork of [LogeshR15/screener-mcp](https://github.com/LogeshR15/screener-mcp) by Logesh Ramasamy
 
 `screener-mcp` connects Claude (Claude Code, Claude Desktop, or any MCP client) to Indian equity data: company financials, stock screening, annual reports, earnings calls, corporate announcements, and a local portfolio tracker. Point Claude at a company or a screen, and it does the research using real, current data instead of its training-data knowledge of the stock.
 
@@ -209,7 +209,7 @@ Then run it directly, or point `claude mcp add` at the `screener-mcp` entry poin
 ### Developer (local clone)
 
 ```bash
-git clone https://github.com/LogeshR15/screener-mcp
+git clone https://github.com/theinvincibles-ai/screener-mcp
 cd screener-mcp
 python3.11 -m venv .venv
 source .venv/bin/activate
@@ -603,7 +603,7 @@ screener-mcp/
 See [CONTRIBUTING.md](CONTRIBUTING.md) — adding a new tool takes ~10 minutes.
 
 ```bash
-git clone https://github.com/LogeshR15/screener-mcp
+git clone https://github.com/theinvincibles-ai/screener-mcp
 cd screener-mcp
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+- Repository, issue, CI and clone links now point to the
+  `theinvincibles-ai/screener-mcp` fork. The PyPI name, MCP registry id and
+  original author credit are unchanged.
+
 ### Fixed
 - **Consolidated → standalone fallback stopped working** for companies without
   subsidiaries (e.g. MSUMI), so the overview came back with price, market cap

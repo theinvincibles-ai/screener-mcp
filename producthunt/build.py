@@ -44,7 +44,7 @@ def page(body):
     return f"<!doctype html><meta charset=utf-8><style>{CSS}</style><body><div class=wrap>{body}</div></body>"
 
 LOGO = '<div class=logo><i>S</i>Screener MCP</div>'
-FOOT = f'<div class=foot>{LOGO}<span>github.com/LogeshR15/screener-mcp</span></div>'
+FOOT = f'<div class=foot>{LOGO}<span>github.com/theinvincibles-ai/screener-mcp</span></div>'
 
 slides = {}
 
