@@ -34,6 +34,8 @@ ai = [
     "chromadb>=0.5.0",
     "sentence-transformers>=3.0.0",
 ]
+# Read-only Telegram channel reader (telegram_status, get_channel_mentions)
+telegram = ["telethon>=1.36,<2"]
 
 [project.urls]
 Homepage = "https://github.com/LogeshR15/screener-mcp"
@@ -42,6 +44,7 @@ Issues = "https://github.com/LogeshR15/screener-mcp/issues"
 
 [project.scripts]
 screener-mcp = "screener_mcp.server:main"
+screener-mcp-telegram = "screener_mcp.telegram_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

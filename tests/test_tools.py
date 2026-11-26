@@ -61,6 +61,9 @@ EXPECTED_TOOLS = {
     # Live prices (FYERS)
     "get_live_quote",
     "fyers_status",
+    # Telegram channels
+    "telegram_status",
+    "get_channel_mentions",
 }
 
 
