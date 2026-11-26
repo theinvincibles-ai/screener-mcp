@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+- **Sign-in for the HTTP transport**, so the server can be used as a claude.ai
+  custom connector from the web and the Claude mobile apps. Set
+  `MCP_AUTH_PASSPHRASE` and `MCP_PUBLIC_URL` to turn on a single-user OAuth
+  sign-in with a passphrase page. A public URL without sign-in is refused at
+  startup. Behind a tunnel, the server now accepts the public hostname.
+  Includes a launchd service and Keychain-based start script for macOS
+  (`scripts/macos/`).
+
 ### Fixed
 - **Consolidated → standalone fallback stopped working** for companies without
   subsidiaries (e.g. MSUMI), so the overview came back with price, market cap
