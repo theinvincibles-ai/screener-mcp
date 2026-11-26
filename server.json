@@ -5,7 +5,7 @@
   "description": "Indian stock research (BSE/NSE) via Screener.in: financials, screens, filings, earnings calls.",
   "websiteUrl": "https://logeshr15.github.io/screener-mcp/",
   "repository": {
-    "url": "https://github.com/LogeshR15/screener-mcp",
+    "url": "https://github.com/theinvincibles-ai/screener-mcp",
     "source": "github"
   },
   "version": "0.6.0",

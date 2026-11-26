@@ -9,7 +9,7 @@ Thanks for helping improve screener-mcp. This guide covers everything you need t
 **Prerequisites:** Python 3.11+, a free [Screener.in](https://www.screener.in/register/) account.
 
 ```bash
-git clone https://github.com/LogeshR15/screener-mcp
+git clone https://github.com/theinvincibles-ai/screener-mcp
 cd screener-mcp
 
 python3.11 -m venv .venv
@@ -320,5 +320,5 @@ version was used up.
 
 ## Questions?
 
-Open an issue at [github.com/LogeshR15/screener-mcp/issues](https://github.com/LogeshR15/screener-mcp/issues)
+Open an issue at [github.com/theinvincibles-ai/screener-mcp/issues](https://github.com/theinvincibles-ai/screener-mcp/issues)
 or reach out directly: **logeshl2003@gmail.com**

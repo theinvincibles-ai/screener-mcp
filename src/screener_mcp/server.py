@@ -189,7 +189,7 @@ def _safe(result, ctx: "Context | None" = None):
         except Exception as e:
             return error_envelope(
                 f"Unexpected error: {type(e).__name__}: {e}. If this persists, please open an issue at "
-                "https://github.com/LogeshR15/screener-mcp/issues",
+                "https://github.com/theinvincibles-ai/screener-mcp/issues",
                 "unexpected_error",
             )
     functools.update_wrapper(wrapper, result)
@@ -243,7 +243,7 @@ mcp = ScreenerServer(
     description="Indian stock research (BSE/NSE) powered by Screener.in: fundamentals, screens, "
     "shareholding, filings and earnings-call search.",
     version=__version__,
-    website_url="https://github.com/LogeshR15/screener-mcp",
+    website_url="https://github.com/theinvincibles-ai/screener-mcp",
     icons=[Icon(src="https://logeshr15.github.io/screener-mcp/icon-192.png", mime_type="image/png", sizes=["192x192"])],
     instructions="""
 You are an expert Indian equity analyst with deep knowledge of Indian stock markets,
