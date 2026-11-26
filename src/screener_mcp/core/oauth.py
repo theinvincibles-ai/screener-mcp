@@ -138,13 +138,12 @@ class PassphraseOAuthProvider:
         if passphrase is None:
             return _login_form(request_id, app_name, target)
 
-        now = time.time()
-        self._failures = [t for t in self._failures if t > now - FAILURE_WINDOW]
-        if len(self._failures) >= MAX_FAILURES:
+        problem = self.check_passphrase(passphrase)
+        if problem == "locked":
             return _page("Too many wrong attempts. Wait 15 minutes and try again.", status=429)
-        if not hmac.compare_digest(passphrase.encode("utf-8"), self._passphrase):
-            self._failures.append(now)
+        if problem:
             return _login_form(request_id, app_name, target, error="That passphrase isn't right.", status=401)
+        now = time.time()
 
         del self._pending[request_id]
         code = secrets.token_urlsafe(32)
@@ -162,6 +161,18 @@ class PassphraseOAuthProvider:
         return RedirectResponse(
             construct_redirect_uri(str(params.redirect_uri), code=code, state=params.state), status_code=302
         )
+
+    def check_passphrase(self, passphrase: str) -> str | None:
+        """None if right; "locked" after too many recent failures; else "wrong".
+        Shared by every page that asks for the passphrase (connector, FYERS)."""
+        now = time.time()
+        self._failures = [t for t in self._failures if t > now - FAILURE_WINDOW]
+        if len(self._failures) >= MAX_FAILURES:
+            return "locked"
+        if not hmac.compare_digest(passphrase.encode("utf-8"), self._passphrase):
+            self._failures.append(now)
+            return "wrong"
+        return None
 
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str

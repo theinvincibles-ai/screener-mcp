@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Live prices from FYERS (optional).** With your own FYERS data-only API app
+  (`FYERS_APP_ID`, `FYERS_SECRET_KEY`) on the claude.ai setup, two new tools,
+  `get_live_quote` and `fyers_status`, give live quotes for up to 50 NSE
+  symbols. `get_portfolio` and `get_company_overview` use the live price when
+  connected and fall back to Screener's delayed price otherwise, saying which.
+  Sign in once a day at `/fyers/login` (behind the connector passphrase), since
+  FYERS tokens expire at 6:30 AM IST. No new dependency.
 - **Sign-in for the HTTP transport**, so the server can be used as a claude.ai
   custom connector from the web and the Claude mobile apps. Set
   `MCP_AUTH_PASSPHRASE` and `MCP_PUBLIC_URL` to turn on a single-user OAuth

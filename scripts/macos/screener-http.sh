@@ -6,7 +6,9 @@
 #   security add-generic-password -U -s screener-mcp -a auth-passphrase -w
 #   security add-generic-password -U -s screener-mcp -a screener-username -w
 #   security add-generic-password -U -s screener-mcp -a screener-password -w
-# (each prompts for the value; the Screener.in pair is optional)
+#   security add-generic-password -U -s screener-mcp -a fyers-app-id -w
+#   security add-generic-password -U -s screener-mcp -a fyers-secret -w
+# (each prompts for the value; the Screener.in and FYERS pairs are optional)
 set -euo pipefail
 
 # Your public https address from Tailscale Funnel or Cloudflare Tunnel, no /mcp.
@@ -21,6 +23,10 @@ export MCP_AUTH_PASSPHRASE="$(secret auth-passphrase)"
 user="$(secret screener-username)"; pass="$(secret screener-password)"
 if [[ -n "$user" && -n "$pass" ]]; then
   export SCREENER_USERNAME="$user" SCREENER_PASSWORD="$pass"
+fi
+fyers_id="$(secret fyers-app-id)"; fyers_secret="$(secret fyers-secret)"
+if [[ -n "$fyers_id" && -n "$fyers_secret" ]]; then
+  export FYERS_APP_ID="$fyers_id" FYERS_SECRET_KEY="$fyers_secret"
 fi
 
 exec "$HOME/.local/bin/screener-mcp"

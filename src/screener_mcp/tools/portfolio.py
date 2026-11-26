@@ -16,6 +16,7 @@ from ..core.company_page import fetch_company_page
 from ..core.envelope import ToolError, ToolResult
 from ..core.local_store import read_json, write_json
 from ..parsers.company import parse_overview
+from .live_tools import live_prices
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +148,8 @@ async def get_portfolio() -> ToolResult:
     """
     View your portfolio with live prices, P&L, and per-holding weight.
 
-    Fetches the current price for each holding from Screener.in and computes
+    Prices come from FYERS when it's connected (one request, live), else from
+    Screener.in per holding (delayed); each holding says which. Computes
     invested value, current value, absolute/percentage gain, and each
     position's weight in the total portfolio.
     """
@@ -165,7 +167,11 @@ async def get_portfolio() -> ToolResult:
     total_current = 0.0
     price_errors = []
 
-    prices = await asyncio.gather(*[_live_price(sym) for sym in holdings])
+    # Live FYERS prices in one request when connected; Screener per stock otherwise.
+    live, live_note = await live_prices(list(holdings))
+    fallback = [sym for sym in holdings if sym not in live]
+    delayed = dict(zip(fallback, await asyncio.gather(*[_live_price(sym) for sym in fallback])))
+    prices = [live[sym]["ltp"] if sym in live else delayed[sym] for sym in holdings]
     for (symbol, h), price in zip(holdings.items(), prices):
         qty = h["quantity"]
         avg = h["avg_price"]
@@ -198,6 +204,7 @@ async def get_portfolio() -> ToolResult:
             "quantity": r["qty"],
             "avg_price": round(r["avg"], 2),
             "ltp": r["price"],
+            "price_source": ("fyers_live" if r["symbol"] in live else "screener_delayed") if r["price"] is not None else None,
             "invested": round(r["invested"], 2),
             "current_value": round(r["current"], 2) if r["current"] is not None else None,
             "pnl": round(r["pnl"], 2) if r["pnl"] is not None else None,
@@ -216,6 +223,7 @@ async def get_portfolio() -> ToolResult:
     }
     return ToolResult(
         data={"holdings": holdings_out, "totals": totals, "currency": "INR"},
+        warnings=[live_note] if live_note else [],
         missing_fields=[f"{sym}.price" for sym in price_errors],
         reason=(f"Live price unavailable for {', '.join(price_errors)} — totals.pnl covers only holdings "
                 "with a live price.") if price_errors else None,

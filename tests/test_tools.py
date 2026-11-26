@@ -58,6 +58,9 @@ EXPECTED_TOOLS = {
     "update_portfolio_stock",
     "remove_portfolio_stock",
     "get_portfolio",
+    # Live prices (FYERS)
+    "get_live_quote",
+    "fyers_status",
 }
 
 
